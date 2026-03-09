@@ -51,6 +51,13 @@ npm install
 npm start
 ```
 
+## Testing
+
+```bash
+npm test             # run all tests
+npm run test:watch   # run in watch mode
+```
+
 ## Build
 
 Build packages for your platform:
