@@ -132,6 +132,17 @@ ipcMain.handle('get-branches', async (_event, repoPath) => {
   }
 });
 
+// Create a new branch and switch to it
+ipcMain.handle('create-branch', async (_event, repoPath, branchName) => {
+  try {
+    const git = simpleGit(repoPath);
+    await git.checkoutLocalBranch(branchName);
+    return { ok: true };
+  } catch (err) {
+    return { error: err.message };
+  }
+});
+
 // Switch branch — aborts if dirty state would conflict
 ipcMain.handle('switch-branch', async (_event, repoPath, branchName) => {
   try {
@@ -217,50 +228,58 @@ ipcMain.handle('get-status', async (_event, repoPath) => {
     const status = await git.status();
     const branch = status.current;
 
-    const files = [];
-    const seen = new Set();
+    // Build a de-duplicated file list. Each file appears once.
+    // Priority: if a file is staged (even partially), mark it staged.
+    const fileMap = new Map();
 
-    // Created (staged new files) — check first so staged loop skips them
+    const stagedSet = new Set(status.staged);
     const createdSet = new Set(status.created);
-    const renamedSet = new Set(status.renamed.map((r) => r.to));
+    const renamedToSet = new Set(status.renamed.map((r) => r.to));
 
-    // Modified (unstaged)
-    for (const f of status.modified) {
-      files.push({ path: f, status: 'modified', staged: false });
-      seen.add(f);
-    }
-    // Modified (staged) — exclude created and renamed which are handled separately
+    // Staged modifications (not created, not renamed — those are handled below)
     for (const f of status.staged) {
-      if (!createdSet.has(f) && !renamedSet.has(f)) {
-        files.push({ path: f, status: 'staged', staged: true });
-        seen.add(f);
+      if (!createdSet.has(f) && !renamedToSet.has(f)) {
+        fileMap.set(f, { path: f, status: 'modified', staged: true });
       }
     }
-    // New (untracked)
+
+    // Unstaged modifications — only add if not already tracked as staged
+    for (const f of status.modified) {
+      if (!fileMap.has(f)) {
+        fileMap.set(f, { path: f, status: 'modified', staged: false });
+      }
+    }
+
+    // Untracked files
     for (const f of status.not_added) {
-      if (!seen.has(f)) {
-        files.push({ path: f, status: 'untracked', staged: false });
-        seen.add(f);
+      if (!fileMap.has(f)) {
+        fileMap.set(f, { path: f, status: 'untracked', staged: false });
       }
     }
-    // Deleted
+
+    // Deleted files
     for (const f of status.deleted) {
-      if (!seen.has(f)) {
-        files.push({ path: f, status: 'deleted', staged: false });
-        seen.add(f);
+      if (!fileMap.has(f)) {
+        fileMap.set(f, { path: f, status: 'deleted', staged: stagedSet.has(f) });
       }
     }
-    // Renamed
+
+    // Renamed files
     for (const r of status.renamed) {
-      files.push({ path: `${r.from} → ${r.to}`, status: 'renamed', staged: true });
+      const key = `${r.from} → ${r.to}`;
+      if (!fileMap.has(key)) {
+        fileMap.set(key, { path: key, status: 'renamed', staged: true });
+      }
     }
+
     // Created (staged new files)
     for (const f of status.created) {
-      if (!seen.has(f)) {
-        files.push({ path: f, status: 'new', staged: true });
-        seen.add(f);
+      if (!fileMap.has(f)) {
+        fileMap.set(f, { path: f, status: 'new', staged: true });
       }
     }
+
+    const files = Array.from(fileMap.values());
 
     return { branch, files };
   } catch (err) {

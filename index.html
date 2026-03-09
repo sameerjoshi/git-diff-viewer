@@ -168,6 +168,32 @@
       color: var(--text-dim);
       font-size: 12px;
     }
+    .branch-create {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      color: var(--accent);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+    .branch-create:hover { background: var(--hover); }
+    .branch-create-icon {
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--accent);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      flex-shrink: 0;
+    }
     .branch-error {
       padding: 10px 12px;
       margin: 8px;
@@ -861,14 +887,31 @@
       const allBranches = result.branches;
       const currentBranch = result.current;
 
+      function isValidBranchName(name) {
+        if (!name || name.trim() === '') return false;
+        // Basic git branch name validation
+        if (/[\s~^:?*\[\\]/.test(name)) return false;
+        if (name.startsWith('-') || name.startsWith('.')) return false;
+        if (name.endsWith('.') || name.endsWith('.lock') || name.endsWith('/')) return false;
+        if (name.includes('..') || name.includes('@{')) return false;
+        return true;
+      }
+
       function renderList(filter) {
         const filtered = filter
           ? allBranches.filter((b) => b.toLowerCase().includes(filter.toLowerCase()))
           : allBranches;
 
         let listHtml = '';
-        if (filtered.length === 0) {
-          listHtml = '<div class="branch-empty">No matching branches</div>';
+
+        // Show "Create branch" option if filter text doesn't exactly match an existing branch
+        const exactMatch = filter && allBranches.some((b) => b === filter);
+        if (filter && !exactMatch && isValidBranchName(filter)) {
+          listHtml += `<div class="branch-create" data-new-branch="${escapeHtml(filter)}"><span class="branch-create-icon">+</span> Create branch <strong>${escapeHtml(filter)}</strong></div>`;
+        }
+
+        if (filtered.length === 0 && !filter) {
+          listHtml += '<div class="branch-empty">No branches</div>';
         } else {
           for (const branch of filtered) {
             const isCurrent = branch === currentBranch;
@@ -880,7 +923,7 @@
 
       dropdown.innerHTML = `
         <div class="branch-dropdown-header">
-          <input class="branch-search" type="text" placeholder="Filter branches..." autofocus>
+          <input class="branch-search" type="text" placeholder="Find or create a branch..." autofocus>
         </div>
         <div class="branch-list">${renderList('')}</div>
       `;
@@ -892,29 +935,31 @@
 
       searchInput.addEventListener('input', () => {
         branchList.innerHTML = renderList(searchInput.value);
-        attachBranchClickHandlers();
+        attachHandlers();
       });
 
-      function attachBranchClickHandlers() {
+      function showError(msg) {
+        let errorDiv = dropdown.querySelector('.branch-error');
+        if (!errorDiv) {
+          errorDiv = document.createElement('div');
+          errorDiv.className = 'branch-error';
+          dropdown.appendChild(errorDiv);
+        }
+        errorDiv.textContent = msg;
+      }
+
+      function attachHandlers() {
+        // Switch branch
         branchList.querySelectorAll('.branch-item:not(.current)').forEach((el) => {
           el.addEventListener('click', async () => {
             const branch = el.dataset.branch;
-            // Show switching state
             el.style.opacity = '0.5';
             el.textContent = `Switching to ${branch}...`;
 
             const switchResult = await window.gitAPI.switchBranch(currentRepo, branch);
 
             if (switchResult.error) {
-              // Show error inline in dropdown
-              let errorDiv = dropdown.querySelector('.branch-error');
-              if (!errorDiv) {
-                errorDiv = document.createElement('div');
-                errorDiv.className = 'branch-error';
-                dropdown.appendChild(errorDiv);
-              }
-              errorDiv.textContent = switchResult.error;
-              // Restore the item
+              showError(switchResult.error);
               el.style.opacity = '';
               el.textContent = branch;
               return;
@@ -924,9 +969,30 @@
             await loadStatus();
           });
         });
+
+        // Create branch
+        branchList.querySelectorAll('.branch-create').forEach((el) => {
+          el.addEventListener('click', async () => {
+            const name = el.dataset.newBranch;
+            el.style.opacity = '0.5';
+            el.innerHTML = `<span class="branch-create-icon">+</span> Creating ${escapeHtml(name)}...`;
+
+            const result = await window.gitAPI.createBranch(currentRepo, name);
+
+            if (result.error) {
+              showError(result.error);
+              el.style.opacity = '';
+              el.innerHTML = `<span class="branch-create-icon">+</span> Create branch <strong>${escapeHtml(name)}</strong>`;
+              return;
+            }
+
+            closeBranchDropdown();
+            await loadStatus();
+          });
+        });
       }
 
-      attachBranchClickHandlers();
+      attachHandlers();
 
       // Focus search
       setTimeout(() => searchInput.focus(), 0);

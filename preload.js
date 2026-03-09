@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('gitAPI', {
   getRecentRepos: () => ipcRenderer.invoke('get-recent-repos'),
   removeRecentRepo: (repoPath) => ipcRenderer.invoke('remove-recent-repo', repoPath),
   getBranches: (repoPath) => ipcRenderer.invoke('get-branches', repoPath),
+  createBranch: (repoPath, branchName) => ipcRenderer.invoke('create-branch', repoPath, branchName),
   switchBranch: (repoPath, branchName) => ipcRenderer.invoke('switch-branch', repoPath, branchName),
   stageFile: (repoPath, filePath, stage) => ipcRenderer.invoke('stage-file', repoPath, filePath, stage),
   stageAll: (repoPath, stage) => ipcRenderer.invoke('stage-all', repoPath, stage),
