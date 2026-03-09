@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Git Diff Viewer</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f6f8fa;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --text-dim: #656d76;
+      --accent: #0969da;
+      --green: #1a7f37;
+      --green-bg: rgba(26, 127, 55, 0.1);
+      --red: #cf222e;
+      --red-bg: rgba(207, 34, 46, 0.1);
+      --yellow: #9a6700;
+      --orange: #bc4c00;
+      --hover: #eaeef2;
+      --active: #ddf4ff;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Ubuntu', Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Header — GH Desktop style toolbar */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .header h1 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .btn {
+      padding: 5px 12px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .btn:hover { background: var(--hover); border-color: #afb8c1; }
+    .btn-primary {
+      background: #2da44e;
+      border-color: rgba(27,31,36,0.15);
+      color: #fff;
+    }
+    .btn-primary:hover { background: #2c974b; }
+    .repo-path {
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-left: auto;
+      max-width: 500px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .branch-wrapper {
+      position: relative;
+    }
+    .branch-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      background: rgba(9, 105, 218, 0.08);
+      color: var(--accent);
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-weight: 500;
+      border: 1px solid rgba(9, 105, 218, 0.2);
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.12s;
+    }
+    .branch-badge:hover { background: rgba(9, 105, 218, 0.15); }
+    .branch-badge::after {
+      content: '';
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 5px solid var(--accent);
+      margin-left: 2px;
+    }
+
+    /* Branch dropdown */
+    .branch-dropdown {
+      position: absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      width: 280px;
+      max-height: 360px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .branch-dropdown-header {
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .branch-search {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+    }
+    .branch-search:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(9,105,218,0.15); }
+    .branch-search::placeholder { color: var(--text-dim); }
+    .branch-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    .branch-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .branch-item:hover { background: var(--hover); }
+    .branch-item.current { color: var(--accent); font-weight: 600; }
+    .branch-item.current::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+    .branch-item:not(.current)::before {
+      content: '';
+      width: 8px;
+      height: 8px;
+      flex-shrink: 0;
+    }
+    .branch-empty {
+      padding: 12px;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 12px;
+    }
+    .branch-error {
+      padding: 10px 12px;
+      margin: 8px;
+      background: var(--red-bg);
+      color: var(--red);
+      border-radius: 6px;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+
+    /* Main layout */
+    .main {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* File list sidebar */
+    .sidebar {
+      width: 300px;
+      min-width: 180px;
+      max-width: 600px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .sidebar-header {
+      padding: 10px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .file-list {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .file-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      cursor: pointer;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s;
+    }
+    .file-item:hover { background: var(--hover); }
+    .file-item.active { background: var(--active); border-left: 2px solid var(--accent); }
+    .file-status {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 3px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+      letter-spacing: 0.3px;
+    }
+    .file-status.modified { background: rgba(210,153,34,0.2); color: var(--yellow); }
+    .file-status.staged { background: rgba(63,185,80,0.2); color: var(--green); }
+    .file-status.untracked { background: rgba(219,109,40,0.2); color: var(--orange); }
+    .file-status.deleted { background: rgba(248,81,73,0.2); color: var(--red); }
+    .file-status.renamed { background: rgba(88,166,255,0.2); color: var(--accent); }
+    .file-status.new { background: rgba(63,185,80,0.2); color: var(--green); }
+    .file-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--text);
+    }
+
+    /* Resize handle */
+    .resize-handle {
+      width: 4px;
+      cursor: col-resize;
+      background: transparent;
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+    .resize-handle:hover,
+    .resize-handle.active {
+      background: var(--accent);
+    }
+
+    /* Diff pane */
+    .diff-pane {
+      flex: 1;
+      overflow: auto;
+      padding: 0;
+      background: var(--bg);
+    }
+    .diff-pane .empty-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-dim);
+      font-size: 13px;
+    }
+    .diff-file-header {
+      padding: 8px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .diff-content {
+      font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+      font-size: 12px;
+      line-height: 20px;
+      white-space: pre;
+      padding: 0;
+    }
+    .diff-line {
+      padding: 0 16px 0 0;
+      min-height: 20px;
+      display: flex;
+    }
+    .diff-line.add { background: var(--green-bg); }
+    .diff-line.del { background: var(--red-bg); }
+    .diff-line.hunk {
+      background: rgba(88, 166, 255, 0.08);
+      color: var(--accent);
+      padding: 4px 16px 4px 0;
+      margin-top: 2px;
+    }
+    .diff-line.meta { color: var(--text-dim); }
+    .diff-line-text { flex: 1; }
+    .diff-line.add .diff-line-text { color: var(--green); }
+    .diff-line.del .diff-line-text { color: var(--red); }
+    .line-num {
+      display: inline-block;
+      min-width: 50px;
+      padding: 0 8px;
+      color: var(--text-dim);
+      text-align: right;
+      user-select: none;
+      opacity: 0.5;
+      flex-shrink: 0;
+    }
+    .diff-line.hunk .line-num { visibility: hidden; }
+    .diff-line.meta .line-num { visibility: hidden; }
+
+    /* Welcome screen */
+    .welcome {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      gap: 16px;
+      width: 100%;
+    }
+    .welcome h2 { color: var(--text); font-size: 20px; font-weight: 600; }
+    .welcome p { color: var(--text-dim); font-size: 13px; }
+
+    /* Recent repos */
+    .recent-repos {
+      width: 100%;
+      max-width: 480px;
+      margin-top: 8px;
+    }
+    .recent-repos h3 {
+      font-size: 11px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .recent-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin-bottom: 4px;
+      cursor: pointer;
+      transition: background 0.12s, border-color 0.12s;
+    }
+    .recent-item:hover { background: var(--hover); border-color: #afb8c1; }
+    .recent-item-path {
+      flex: 1;
+      overflow: hidden;
+    }
+    .recent-item-name {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text);
+    }
+    .recent-item-dir {
+      color: var(--text-dim);
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .recent-remove {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 16px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      line-height: 1;
+    }
+    .recent-remove:hover { color: var(--red); background: var(--red-bg); }
+
+    /* File checkboxes */
+    .file-check {
+      width: 14px;
+      height: 14px;
+      accent-color: var(--accent);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* Commit panel */
+    .commit-panel {
+      border-top: 1px solid var(--border);
+      padding: 10px;
+      background: var(--bg);
+      flex-shrink: 0;
+    }
+    .commit-summary {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+      font-family: inherit;
+    }
+    .commit-summary:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(9,105,218,0.15); }
+    .commit-summary::placeholder { color: var(--text-dim); }
+    .commit-desc {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      background: var(--surface);
+      color: var(--text);
+      outline: none;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 50px;
+      margin-top: 6px;
+    }
+    .commit-desc:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(9,105,218,0.15); }
+    .commit-desc::placeholder { color: var(--text-dim); }
+    .commit-btn {
+      width: 100%;
+      padding: 7px 12px;
+      margin-top: 8px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      background: #2da44e;
+      color: #fff;
+      transition: background 0.12s;
+    }
+    .commit-btn:hover:not(:disabled) { background: #2c974b; }
+    .commit-btn:disabled {
+      background: var(--border);
+      color: var(--text-dim);
+      cursor: not-allowed;
+    }
+    .commit-error {
+      margin-top: 6px;
+      padding: 6px 8px;
+      background: var(--red-bg);
+      color: var(--red);
+      border-radius: 6px;
+      font-size: 11px;
+      white-space: pre-wrap;
+    }
+    .commit-success {
+      margin-top: 6px;
+      padding: 6px 8px;
+      background: var(--green-bg);
+      color: var(--green);
+      border-radius: 6px;
+      font-size: 11px;
+    }
+    .select-all-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 14px;
+    }
+    .select-all-row label {
+      font-size: 11px;
+      color: var(--text-dim);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #afb8c1; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Git Diff Viewer</h1>
+    <button class="btn" id="openBtn">Open Repository</button>
+    <button class="btn" id="refreshBtn" style="display:none;">Refresh</button>
+    <div class="branch-wrapper" id="branchWrapper" style="display:none;">
+      <span class="branch-badge" id="branchBadge"></span>
+    </div>
+    <span class="repo-path" id="repoPathLabel"></span>
+  </div>
+
+  <div class="main" id="mainContent">
+    <div class="welcome" id="welcomeScreen">
+      <h2>Git Diff Viewer</h2>
+      <p>Open a git repository to view changed files and diffs.</p>
+      <button class="btn btn-primary" id="openBtn2">Open Repository</button>
+      <div class="recent-repos" id="recentRepos"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentRepo = null;
+    let currentFiles = [];
+    let sidebarWidth = 300;
+
+    const mainContent = document.getElementById('mainContent');
+    const openBtn = document.getElementById('openBtn');
+    const openBtn2 = document.getElementById('openBtn2');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const branchWrapper = document.getElementById('branchWrapper');
+    const branchBadge = document.getElementById('branchBadge');
+    const repoPathLabel = document.getElementById('repoPathLabel');
+
+    async function openRepo() {
+      const folder = await window.gitAPI.openFolder();
+      if (!folder) return;
+      currentRepo = folder;
+      await loadStatus();
+    }
+
+    async function openRepoByPath(repoPath) {
+      currentRepo = repoPath;
+      await loadStatus();
+    }
+
+    async function renderRecentRepos() {
+      const container = document.getElementById('recentRepos');
+      if (!container) return;
+
+      const repos = await window.gitAPI.getRecentRepos();
+      if (repos.length === 0) {
+        container.innerHTML = '';
+        return;
+      }
+
+      let html = '<h3>Recent Repositories</h3>';
+      for (const repo of repos) {
+        const name = repo.split('/').pop();
+        const dir = repo.substring(0, repo.length - name.length);
+        html += `
+          <div class="recent-item" data-path="${escapeHtml(repo)}">
+            <div class="recent-item-path">
+              <div class="recent-item-name">${escapeHtml(name)}</div>
+              <div class="recent-item-dir">${escapeHtml(dir)}</div>
+            </div>
+            <button class="recent-remove" data-remove="${escapeHtml(repo)}" title="Remove">&times;</button>
+          </div>
+        `;
+      }
+      container.innerHTML = html;
+
+      container.querySelectorAll('.recent-item').forEach((el) => {
+        el.addEventListener('click', (e) => {
+          if (e.target.closest('.recent-remove')) return;
+          openRepoByPath(el.dataset.path);
+        });
+      });
+
+      container.querySelectorAll('.recent-remove').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await window.gitAPI.removeRecentRepo(btn.dataset.remove);
+          await renderRecentRepos();
+        });
+      });
+    }
+
+    async function loadStatus() {
+      if (!currentRepo) return;
+
+      const result = await window.gitAPI.getStatus(currentRepo);
+
+      if (result.error) {
+        repoPathLabel.textContent = result.error;
+        return;
+      }
+
+      repoPathLabel.textContent = currentRepo;
+      currentBranch = result.branch || 'detached';
+      branchBadge.textContent = currentBranch;
+      branchWrapper.style.display = 'inline-block';
+      refreshBtn.style.display = 'inline';
+      currentFiles = result.files;
+
+      renderApp();
+    }
+
+    let currentBranch = '';
+
+    function renderApp() {
+      const stagedCount = currentFiles.filter((f) => f.staged).length;
+      const allStaged = currentFiles.length > 0 && stagedCount === currentFiles.length;
+
+      mainContent.innerHTML = `
+        <div class="sidebar" id="sidebar" style="width:${sidebarWidth}px">
+          <div class="sidebar-header">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <span>Changed files (${currentFiles.length})</span>
+              <div class="select-all-row">
+                <input type="checkbox" class="file-check" id="selectAllCheck" ${allStaged ? 'checked' : ''} ${currentFiles.length === 0 ? 'disabled' : ''}>
+                <label for="selectAllCheck">All</label>
+              </div>
+            </div>
+          </div>
+          <div class="file-list" id="fileList"></div>
+          <div class="commit-panel" id="commitPanel">
+            <input class="commit-summary" id="commitSummary" type="text" placeholder="Summary (required)" maxlength="72">
+            <textarea class="commit-desc" id="commitDesc" placeholder="Description (optional)" rows="3"></textarea>
+            <button class="commit-btn" id="commitBtn" disabled>Commit to <strong>${escapeHtml(currentBranch)}</strong></button>
+            <div id="commitMessage"></div>
+          </div>
+        </div>
+        <div class="resize-handle" id="resizeHandle"></div>
+        <div class="diff-pane" id="diffPane">
+          <div class="empty-state">Select a file to view its diff</div>
+        </div>
+      `;
+
+      setupResize();
+      setupCommitPanel();
+
+      const fileList = document.getElementById('fileList');
+
+      if (currentFiles.length === 0) {
+        fileList.innerHTML = '<div style="padding:14px;color:var(--text-dim);font-size:13px;">No changes detected</div>';
+        return;
+      }
+
+      for (const file of currentFiles) {
+        const el = document.createElement('div');
+        el.className = 'file-item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.className = 'file-check';
+        checkbox.checked = file.staged;
+        checkbox.addEventListener('click', (e) => e.stopPropagation());
+        checkbox.addEventListener('change', async () => {
+          const cleanPath = file.path.includes('\u2192') ? file.path.split('\u2192')[1].trim() : file.path;
+          await window.gitAPI.stageFile(currentRepo, cleanPath, checkbox.checked);
+          await loadStatus();
+        });
+
+        const statusSpan = document.createElement('span');
+        statusSpan.className = `file-status ${file.status}`;
+        statusSpan.textContent = file.status;
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'file-name';
+        nameSpan.title = file.path;
+        nameSpan.textContent = file.path;
+
+        el.appendChild(checkbox);
+        el.appendChild(statusSpan);
+        el.appendChild(nameSpan);
+        el.addEventListener('click', () => selectFile(file, el));
+        fileList.appendChild(el);
+      }
+    }
+
+    function setupCommitPanel() {
+      const summaryInput = document.getElementById('commitSummary');
+      const descInput = document.getElementById('commitDesc');
+      const commitBtn = document.getElementById('commitBtn');
+      const commitMsg = document.getElementById('commitMessage');
+      const selectAllCheck = document.getElementById('selectAllCheck');
+
+      function updateCommitBtn() {
+        const hasSummary = summaryInput.value.trim().length > 0;
+        const hasStaged = currentFiles.some((f) => f.staged);
+        commitBtn.disabled = !hasSummary || !hasStaged;
+      }
+
+      summaryInput.addEventListener('input', updateCommitBtn);
+      // Initial state
+      updateCommitBtn();
+
+      // Select all / deselect all
+      selectAllCheck.addEventListener('change', async () => {
+        await window.gitAPI.stageAll(currentRepo, selectAllCheck.checked);
+        // Preserve commit message across refresh
+        const summary = summaryInput.value;
+        const desc = descInput.value;
+        await loadStatus();
+        document.getElementById('commitSummary').value = summary;
+        document.getElementById('commitDesc').value = desc;
+        // Re-run updateCommitBtn after refresh
+        const newSummary = document.getElementById('commitSummary');
+        const newBtn = document.getElementById('commitBtn');
+        if (newSummary && newBtn) {
+          const hasSummary = newSummary.value.trim().length > 0;
+          const hasStaged = currentFiles.some((f) => f.staged);
+          newBtn.disabled = !hasSummary || !hasStaged;
+        }
+      });
+
+      commitBtn.addEventListener('click', async () => {
+        const summary = summaryInput.value.trim();
+        const desc = descInput.value.trim();
+        if (!summary) return;
+
+        const message = desc ? `${summary}\n\n${desc}` : summary;
+
+        commitBtn.disabled = true;
+        commitBtn.textContent = 'Committing...';
+        commitMsg.innerHTML = '';
+
+        const result = await window.gitAPI.commit(currentRepo, message);
+
+        if (result.error) {
+          commitMsg.innerHTML = `<div class="commit-error">${escapeHtml(result.error)}</div>`;
+          commitBtn.disabled = false;
+          commitBtn.innerHTML = `Commit to <strong>${escapeHtml(currentBranch)}</strong>`;
+          return;
+        }
+
+        const s = result.summary;
+        const info = s ? `${s.changes} file(s), +${s.insertions} -${s.deletions}` : 'Done';
+        commitMsg.innerHTML = `<div class="commit-success">Committed: ${escapeHtml(info)}</div>`;
+
+        // Clear inputs and refresh
+        summaryInput.value = '';
+        descInput.value = '';
+        setTimeout(() => loadStatus(), 800);
+      });
+    }
+
+    function setupResize() {
+      const handle = document.getElementById('resizeHandle');
+      const sidebar = document.getElementById('sidebar');
+      if (!handle || !sidebar) return;
+
+      let startX, startWidth;
+
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        startX = e.clientX;
+        startWidth = sidebar.offsetWidth;
+        handle.classList.add('active');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        function onMouseMove(e) {
+          const newWidth = Math.min(600, Math.max(180, startWidth + (e.clientX - startX)));
+          sidebar.style.width = newWidth + 'px';
+          sidebarWidth = newWidth;
+        }
+
+        function onMouseUp() {
+          handle.classList.remove('active');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+        }
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+    }
+
+    async function selectFile(file, el) {
+      document.querySelectorAll('.file-item').forEach((e) => e.classList.remove('active'));
+      el.classList.add('active');
+
+      const diffPane = document.getElementById('diffPane');
+      diffPane.innerHTML = '<div class="empty-state">Loading...</div>';
+
+      const cleanPath = file.path.includes('\u2192') ? file.path.split('\u2192')[1].trim() : file.path;
+      const result = await window.gitAPI.getDiff(currentRepo, cleanPath, file.staged);
+
+      if (result.error) {
+        diffPane.innerHTML = `<div class="empty-state">${escapeHtml(result.error)}</div>`;
+        return;
+      }
+
+      renderDiff(result.diff, cleanPath);
+    }
+
+    function renderDiff(rawDiff, filePath) {
+      const diffPane = document.getElementById('diffPane');
+
+      if (!rawDiff || rawDiff.trim() === '') {
+        diffPane.innerHTML = '<div class="empty-state">No diff available (file may be unchanged or binary)</div>';
+        return;
+      }
+
+      const lines = rawDiff.split('\n');
+      let html = '';
+      if (filePath) {
+        html += `<div class="diff-file-header">${escapeHtml(filePath)}</div>`;
+      }
+      html += '<div class="diff-content">';
+      let oldLine = 0, newLine = 0;
+
+      for (const line of lines) {
+        if (line.startsWith('@@')) {
+          const match = line.match(/@@ -(\d+)/);
+          if (match) oldLine = parseInt(match[1]) - 1;
+          const match2 = line.match(/\+(\d+)/);
+          if (match2) newLine = parseInt(match2[1]) - 1;
+          html += `<div class="diff-line hunk"><span class="line-num"></span><span class="diff-line-text">${escapeHtml(line)}</span></div>`;
+        } else if (line.startsWith('+++') || line.startsWith('---')) {
+          html += `<div class="diff-line meta"><span class="line-num"></span><span class="diff-line-text">${escapeHtml(line)}</span></div>`;
+        } else if (line.startsWith('+')) {
+          newLine++;
+          html += `<div class="diff-line add"><span class="line-num">${newLine}</span><span class="diff-line-text">${escapeHtml(line)}</span></div>`;
+        } else if (line.startsWith('-')) {
+          oldLine++;
+          html += `<div class="diff-line del"><span class="line-num">${oldLine}</span><span class="diff-line-text">${escapeHtml(line)}</span></div>`;
+        } else if (line.startsWith('diff ') || line.startsWith('index ')) {
+          html += `<div class="diff-line meta"><span class="line-num"></span><span class="diff-line-text">${escapeHtml(line)}</span></div>`;
+        } else {
+          oldLine++;
+          newLine++;
+          html += `<div class="diff-line"><span class="line-num">${newLine}</span><span class="diff-line-text">${escapeHtml(line)}</span></div>`;
+        }
+      }
+
+      html += '</div>';
+      diffPane.innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    // Branch dropdown
+    let branchDropdownOpen = false;
+
+    function closeBranchDropdown() {
+      const existing = branchWrapper.querySelector('.branch-dropdown');
+      if (existing) existing.remove();
+      branchDropdownOpen = false;
+    }
+
+    async function openBranchDropdown() {
+      if (branchDropdownOpen) { closeBranchDropdown(); return; }
+      if (!currentRepo) return;
+
+      const result = await window.gitAPI.getBranches(currentRepo);
+      if (result.error) return;
+
+      branchDropdownOpen = true;
+      const dropdown = document.createElement('div');
+      dropdown.className = 'branch-dropdown';
+
+      const allBranches = result.branches;
+      const currentBranch = result.current;
+
+      function renderList(filter) {
+        const filtered = filter
+          ? allBranches.filter((b) => b.toLowerCase().includes(filter.toLowerCase()))
+          : allBranches;
+
+        let listHtml = '';
+        if (filtered.length === 0) {
+          listHtml = '<div class="branch-empty">No matching branches</div>';
+        } else {
+          for (const branch of filtered) {
+            const isCurrent = branch === currentBranch;
+            listHtml += `<div class="branch-item${isCurrent ? ' current' : ''}" data-branch="${escapeHtml(branch)}">${escapeHtml(branch)}</div>`;
+          }
+        }
+        return listHtml;
+      }
+
+      dropdown.innerHTML = `
+        <div class="branch-dropdown-header">
+          <input class="branch-search" type="text" placeholder="Filter branches..." autofocus>
+        </div>
+        <div class="branch-list">${renderList('')}</div>
+      `;
+
+      branchWrapper.appendChild(dropdown);
+
+      const searchInput = dropdown.querySelector('.branch-search');
+      const branchList = dropdown.querySelector('.branch-list');
+
+      searchInput.addEventListener('input', () => {
+        branchList.innerHTML = renderList(searchInput.value);
+        attachBranchClickHandlers();
+      });
+
+      function attachBranchClickHandlers() {
+        branchList.querySelectorAll('.branch-item:not(.current)').forEach((el) => {
+          el.addEventListener('click', async () => {
+            const branch = el.dataset.branch;
+            // Show switching state
+            el.style.opacity = '0.5';
+            el.textContent = `Switching to ${branch}...`;
+
+            const switchResult = await window.gitAPI.switchBranch(currentRepo, branch);
+
+            if (switchResult.error) {
+              // Show error inline in dropdown
+              let errorDiv = dropdown.querySelector('.branch-error');
+              if (!errorDiv) {
+                errorDiv = document.createElement('div');
+                errorDiv.className = 'branch-error';
+                dropdown.appendChild(errorDiv);
+              }
+              errorDiv.textContent = switchResult.error;
+              // Restore the item
+              el.style.opacity = '';
+              el.textContent = branch;
+              return;
+            }
+
+            closeBranchDropdown();
+            await loadStatus();
+          });
+        });
+      }
+
+      attachBranchClickHandlers();
+
+      // Focus search
+      setTimeout(() => searchInput.focus(), 0);
+    }
+
+    branchBadge.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openBranchDropdown();
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (branchDropdownOpen && !branchWrapper.contains(e.target)) {
+        closeBranchDropdown();
+      }
+    });
+
+    // Close dropdown on Escape
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && branchDropdownOpen) {
+        closeBranchDropdown();
+      }
+    });
+
+    openBtn.addEventListener('click', openRepo);
+    openBtn2.addEventListener('click', openRepo);
+    refreshBtn.addEventListener('click', loadStatus);
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
+        e.preventDefault();
+        openRepo();
+      }
+    });
+
+    renderRecentRepos();
+  </script>
+</body>
+</html>

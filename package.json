@@ -1,0 +1,42 @@
+{
+  "name": "git-diff-viewer",
+  "version": "1.0.0",
+  "description": "A simple Git diff viewer",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --linux deb"
+  },
+  "keywords": [],
+  "homepage": "https://github.com/sameerjoshi/git-diff-viewer",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sameerjoshi/git-diff-viewer.git"
+  },
+  "author": {
+    "name": "Sameer Joshi",
+    "email": "sameer@local"
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "build": {
+    "appId": "com.sameerjoshi.git-diff-viewer",
+    "productName": "Git Diff Viewer",
+    "linux": {
+      "target": "deb",
+      "category": "Development"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html"
+    ]
+  },
+  "dependencies": {
+    "simple-git": "^3.32.3"
+  },
+  "devDependencies": {
+    "electron": "^40.8.0",
+    "electron-builder": "^26.8.1"
+  }
+}
