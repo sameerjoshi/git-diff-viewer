@@ -2,6 +2,51 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const simpleGit = require('simple-git');
+const chokidar = require('chokidar');
+
+let repoWatcher = null;
+let gitWatcher = null;
+let watchDebounce = null;
+
+function notifyFilesChanged() {
+  clearTimeout(watchDebounce);
+  watchDebounce = setTimeout(() => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('repo-files-changed');
+    }
+  }, 500);
+}
+
+function watchRepo(repoPath) {
+  // Stop previous watchers
+  if (repoWatcher) { repoWatcher.close(); repoWatcher = null; }
+  if (gitWatcher) { gitWatcher.close(); gitWatcher = null; }
+
+  // Watch working tree (ignore .git and node_modules)
+  repoWatcher = chokidar.watch(repoPath, {
+    ignored: [
+      /(^|[/\\])\.git[/\\]/,
+      /(^|[/\\])node_modules[/\\]/,
+    ],
+    ignoreInitial: true,
+    persistent: true,
+    awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
+  });
+  repoWatcher.on('all', notifyFilesChanged);
+
+  // Watch key git files — these change on commits, staging, branch switches
+  const gitDir = path.join(repoPath, '.git');
+  gitWatcher = chokidar.watch([
+    path.join(gitDir, 'HEAD'),          // branch switches
+    path.join(gitDir, 'index'),         // staging / commits
+    path.join(gitDir, 'refs'),          // new commits, branch creation
+    path.join(gitDir, 'MERGE_HEAD'),    // merge state
+  ], {
+    ignoreInitial: true,
+    persistent: true,
+  });
+  gitWatcher.on('all', notifyFilesChanged);
+}
 
 const RECENT_REPOS_FILE = path.join(app.getPath('userData'), 'recent-repos.json');
 const MAX_RECENT = 10;
@@ -98,7 +143,11 @@ function createWindow() {
 }
 
 app.whenReady().then(createWindow);
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => {
+  if (repoWatcher) repoWatcher.close();
+  if (gitWatcher) gitWatcher.close();
+  app.quit();
+});
 
 // Open folder dialog
 ipcMain.handle('open-folder', async () => {
@@ -280,6 +329,9 @@ ipcMain.handle('get-status', async (_event, repoPath) => {
     }
 
     const files = Array.from(fileMap.values());
+
+    // Start watching this repo for file changes
+    watchRepo(repoPath);
 
     return { branch, files };
   } catch (err) {

@@ -1029,6 +1029,23 @@
     });
 
     renderRecentRepos();
+
+    // Auto-refresh when files change on disk
+    window.gitAPI.onFilesChanged(() => {
+      if (!currentRepo) return;
+      // Preserve commit form inputs across auto-refresh
+      const summaryEl = document.getElementById('commitSummary');
+      const descEl = document.getElementById('commitDesc');
+      const savedSummary = summaryEl ? summaryEl.value : '';
+      const savedDesc = descEl ? descEl.value : '';
+
+      loadStatus().then(() => {
+        const newSummary = document.getElementById('commitSummary');
+        const newDesc = document.getElementById('commitDesc');
+        if (newSummary) newSummary.value = savedSummary;
+        if (newDesc) newDesc.value = savedDesc;
+      });
+    });
   </script>
 </body>
 </html>

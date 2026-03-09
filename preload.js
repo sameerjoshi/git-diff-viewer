@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('gitAPI', {
+  onFilesChanged: (callback) => ipcRenderer.on('repo-files-changed', callback),
   openFolder: () => ipcRenderer.invoke('open-folder'),
   getStatus: (repoPath) => ipcRenderer.invoke('get-status', repoPath),
   getDiff: (repoPath, filePath, staged) =>
