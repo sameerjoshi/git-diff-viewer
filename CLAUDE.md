@@ -7,10 +7,11 @@ Minimal Electron desktop app (GitHub Desktop-style) for git diff viewing, stagin
 
 ## Commands
 - `npm start` — run the app in dev mode (`electron .`)
+- `npm test` — run unit tests (Jest)
+- `npm run test:watch` — run tests in watch mode
 - `npm run build` — build Linux `.deb` package
 - `npm run build:mac` — build macOS `.dmg` package
 - `npm run build:win` — build Windows `.exe` installer
-- No test suite exists. Validate changes by running the app.
 
 ## Package Manager
 npm (lockfile: `package-lock.json`). Do not introduce other package managers.
@@ -20,10 +21,11 @@ npm (lockfile: `package-lock.json`). Do not introduce other package managers.
 Three files, strict Electron process separation:
 
 ```
-main.js      → Main process: all git ops (simple-git), file watching (chokidar),
-               window lifecycle, IPC handlers, user data persistence
-preload.js   → Context bridge: exposes window.gitAPI (12 methods + 1 event listener)
-index.html   → Single-file renderer: ALL markup, CSS, and JS in one file
+main.js        → Main process: Electron wiring, IPC handlers, file watching (chokidar)
+git-helpers.js → Pure business logic extracted for testability (file status dedup,
+                 recent repos, window state, synthetic diffs, error formatting)
+preload.js     → Context bridge: exposes window.gitAPI (12 methods + 1 event listener)
+index.html     → Single-file renderer: ALL markup, CSS, and JS in one file
 ```
 
 **Data flow:** Renderer calls `window.gitAPI.*` → preload forwards via `ipcRenderer.invoke` → main.js handles with `ipcMain.handle` → returns `{ ok, data }` or `{ error }` objects.

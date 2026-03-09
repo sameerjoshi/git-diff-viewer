@@ -23,12 +23,23 @@ Built originally for Ubuntu/Linux, where [GitHub Desktop is not officially suppo
 
 ## Install
 
-### From `.deb` (Ubuntu/Debian)
+Download the latest release for your platform from [Releases](https://github.com/sameerjoshi/git-diff-viewer/releases).
 
-Download the latest `.deb` from [Releases](https://github.com/sameerjoshi/git-diff-viewer/releases), then:
+### macOS
+
+1. Download `Git Diff Viewer-<version>-arm64.dmg`
+2. Open the `.dmg` and drag the app to Applications
+3. On first launch, right-click → Open to bypass Gatekeeper (the app is ad-hoc signed)
+
+### Windows
+
+1. Download `Git Diff Viewer Setup <version>.exe`
+2. Run the installer — it will install and launch automatically
+
+### Linux (Ubuntu/Debian)
 
 ```bash
-sudo dpkg -i git-diff-viewer_*_amd64.deb
+sudo dpkg -i git-diff-viewer_<version>_arm64.deb
 ```
 
 ### From source
@@ -62,11 +73,14 @@ Cross-platform builds may require additional tools — see the [electron-builder
 ## Project Structure
 
 ```
-├── main.js        # Electron main process (git ops, IPC, file watcher, window management)
-├── preload.js     # Context bridge (secure API exposure to renderer)
-├── index.html     # UI (single file: markup, styles, renderer JS)
-├── package.json   # Dependencies and build config
-└── LICENSE        # MIT
+├── main.js             # Electron main process (IPC handlers, file watcher, window management)
+├── git-helpers.js      # Pure business logic (file status dedup, recent repos, diffs)
+├── git-helpers.test.js # Unit tests (Jest)
+├── preload.js          # Context bridge (secure API exposure to renderer)
+├── index.html          # UI (single file: markup, styles, renderer JS)
+├── build/              # App icons (png, icns, ico)
+├── package.json        # Dependencies and build config
+└── LICENSE             # MIT
 ```
 
 ## Contributing

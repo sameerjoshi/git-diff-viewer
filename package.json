@@ -7,9 +7,19 @@
     "start": "electron .",
     "build": "electron-builder --linux deb",
     "build:mac": "electron-builder --mac dmg",
-    "build:win": "electron-builder --win nsis"
+    "build:win": "electron-builder --win nsis",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
-  "keywords": ["git", "diff", "viewer", "electron", "desktop", "staging", "commit"],
+  "keywords": [
+    "git",
+    "diff",
+    "viewer",
+    "electron",
+    "desktop",
+    "staging",
+    "commit"
+  ],
   "homepage": "https://github.com/sameerjoshi/git-diff-viewer",
   "repository": {
     "type": "git",
@@ -37,6 +47,7 @@
     },
     "files": [
       "main.js",
+      "git-helpers.js",
       "preload.js",
       "index.html"
     ]
@@ -47,6 +58,7 @@
   },
   "devDependencies": {
     "electron": "^40.8.0",
-    "electron-builder": "^26.8.1"
+    "electron-builder": "^26.8.1",
+    "jest": "^30.2.0"
   }
 }

@@ -3,6 +3,16 @@ const path = require('path');
 const fs = require('fs');
 const simpleGit = require('simple-git');
 const chokidar = require('chokidar');
+const {
+  buildFileList,
+  buildSyntheticDiff,
+  formatSwitchBranchError,
+  loadRecentRepos,
+  addRecentRepo,
+  removeRecentRepo,
+  loadWindowState: loadWindowStateFromFile,
+  hasCommits,
+} = require('./git-helpers');
 
 app.setName('Git Diff Viewer');
 
@@ -51,35 +61,7 @@ function watchRepo(repoPath) {
 }
 
 const RECENT_REPOS_FILE = path.join(app.getPath('userData'), 'recent-repos.json');
-const MAX_RECENT = 10;
-
-function loadRecentRepos() {
-  try {
-    return JSON.parse(fs.readFileSync(RECENT_REPOS_FILE, 'utf-8'));
-  } catch {
-    return [];
-  }
-}
-
-function addRecentRepo(repoPath) {
-  let recent = loadRecentRepos();
-  // Remove if already exists, then prepend
-  recent = recent.filter((r) => r !== repoPath);
-  recent.unshift(repoPath);
-  if (recent.length > MAX_RECENT) recent = recent.slice(0, MAX_RECENT);
-  fs.writeFileSync(RECENT_REPOS_FILE, JSON.stringify(recent, null, 2));
-  return recent;
-}
-
 const WINDOW_STATE_FILE = path.join(app.getPath('userData'), 'window-state.json');
-
-function loadWindowState() {
-  try {
-    return JSON.parse(fs.readFileSync(WINDOW_STATE_FILE, 'utf-8'));
-  } catch {
-    return { width: 1200, height: 800, isMaximized: false };
-  }
-}
 
 let windowState;
 let saveTimeout;
@@ -113,7 +95,7 @@ function trackWindowState() {
 }
 
 function createWindow() {
-  windowState = loadWindowState();
+  windowState = loadWindowStateFromFile(WINDOW_STATE_FILE);
 
   mainWindow = new BrowserWindow({
     width: windowState.width,
@@ -158,18 +140,15 @@ ipcMain.handle('open-folder', async () => {
   });
   if (result.canceled || result.filePaths.length === 0) return null;
   const selected = result.filePaths[0];
-  addRecentRepo(selected);
+  addRecentRepo(RECENT_REPOS_FILE, selected);
   return selected;
 });
 
 // Recent repos
-ipcMain.handle('get-recent-repos', () => loadRecentRepos());
+ipcMain.handle('get-recent-repos', () => loadRecentRepos(RECENT_REPOS_FILE));
 
 ipcMain.handle('remove-recent-repo', (_event, repoPath) => {
-  let recent = loadRecentRepos();
-  recent = recent.filter((r) => r !== repoPath);
-  fs.writeFileSync(RECENT_REPOS_FILE, JSON.stringify(recent, null, 2));
-  return recent;
+  return removeRecentRepo(RECENT_REPOS_FILE, repoPath);
 });
 
 // Get all local branches
@@ -201,24 +180,9 @@ ipcMain.handle('switch-branch', async (_event, repoPath, branchName) => {
     await git.checkout(branchName);
     return { ok: true };
   } catch (err) {
-    const msg = err.message || '';
-    // Git's error message for conflicts is clear enough to show directly
-    if (msg.includes('Your local changes') || msg.includes('overwritten by checkout')) {
-      return { error: 'Cannot switch branches: you have uncommitted changes that would be overwritten.\n\nPlease commit or stash your changes before switching.' };
-    }
-    return { error: msg };
+    return { error: formatSwitchBranchError(err.message) };
   }
 });
-
-// Check if repo has at least one commit
-async function hasCommits(git) {
-  try {
-    await git.log(['-1']);
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 // Stage or unstage a file
 ipcMain.handle('stage-file', async (_event, repoPath, filePath, stage) => {
@@ -278,59 +242,7 @@ ipcMain.handle('get-status', async (_event, repoPath) => {
 
     const status = await git.status();
     const branch = status.current;
-
-    // Build a de-duplicated file list. Each file appears once.
-    // Priority: if a file is staged (even partially), mark it staged.
-    const fileMap = new Map();
-
-    const stagedSet = new Set(status.staged);
-    const createdSet = new Set(status.created);
-    const renamedToSet = new Set(status.renamed.map((r) => r.to));
-
-    // Staged modifications (not created, not renamed — those are handled below)
-    for (const f of status.staged) {
-      if (!createdSet.has(f) && !renamedToSet.has(f)) {
-        fileMap.set(f, { path: f, status: 'modified', staged: true });
-      }
-    }
-
-    // Unstaged modifications — only add if not already tracked as staged
-    for (const f of status.modified) {
-      if (!fileMap.has(f)) {
-        fileMap.set(f, { path: f, status: 'modified', staged: false });
-      }
-    }
-
-    // Untracked files
-    for (const f of status.not_added) {
-      if (!fileMap.has(f)) {
-        fileMap.set(f, { path: f, status: 'untracked', staged: false });
-      }
-    }
-
-    // Deleted files
-    for (const f of status.deleted) {
-      if (!fileMap.has(f)) {
-        fileMap.set(f, { path: f, status: 'deleted', staged: stagedSet.has(f) });
-      }
-    }
-
-    // Renamed files
-    for (const r of status.renamed) {
-      const key = `${r.from} → ${r.to}`;
-      if (!fileMap.has(key)) {
-        fileMap.set(key, { path: key, status: 'renamed', staged: true });
-      }
-    }
-
-    // Created (staged new files)
-    for (const f of status.created) {
-      if (!fileMap.has(f)) {
-        fileMap.set(f, { path: f, status: 'new', staged: true });
-      }
-    }
-
-    const files = Array.from(fileMap.values());
+    const files = buildFileList(status);
 
     // Start watching this repo for file changes
     watchRepo(repoPath);
@@ -358,10 +270,7 @@ ipcMain.handle('get-diff', async (_event, repoPath, filePath, staged) => {
       const fullPath = path.join(repoPath, filePath);
       try {
         const content = fs.readFileSync(fullPath, 'utf-8');
-        // Format as a unified diff for new files
-        const lines = content.split('\n');
-        diff = `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n`;
-        diff += lines.map((l) => `+${l}`).join('\n');
+        diff = buildSyntheticDiff(filePath, content);
       } catch {
         diff = '(binary or unreadable file)';
       }
