@@ -4,6 +4,8 @@ const fs = require('fs');
 const simpleGit = require('simple-git');
 const chokidar = require('chokidar');
 
+app.setName('Git Diff Viewer');
+
 let repoWatcher = null;
 let gitWatcher = null;
 let watchDebounce = null;

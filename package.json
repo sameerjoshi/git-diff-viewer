@@ -5,9 +5,11 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --linux deb"
+    "build": "electron-builder --linux deb",
+    "build:mac": "electron-builder --mac dmg",
+    "build:win": "electron-builder --win nsis"
   },
-  "keywords": [],
+  "keywords": ["git", "diff", "viewer", "electron", "desktop", "staging", "commit"],
   "homepage": "https://github.com/sameerjoshi/git-diff-viewer",
   "repository": {
     "type": "git",
@@ -15,13 +17,20 @@
   },
   "author": {
     "name": "Sameer Joshi",
-    "email": "sameer@local"
+    "email": "sameerjoshi@users.noreply.github.com"
   },
   "license": "MIT",
   "type": "commonjs",
   "build": {
     "appId": "com.sameerjoshi.git-diff-viewer",
     "productName": "Git Diff Viewer",
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.developer-tools"
+    },
+    "win": {
+      "target": "nsis"
+    },
     "linux": {
       "target": "deb",
       "category": "Development"

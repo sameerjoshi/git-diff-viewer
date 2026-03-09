@@ -40,13 +40,15 @@ npm start
 
 ## Build
 
-Build a `.deb` package locally:
+Build packages for your platform:
 
 ```bash
-npm run build
+npm run build        # Linux (.deb)
+npm run build:mac    # macOS (.dmg)
+npm run build:win    # Windows (.exe)
 ```
 
-Output: `dist/git-diff-viewer_<version>_amd64.deb`
+Cross-platform builds may require additional tools — see the [electron-builder docs](https://www.electron.build/multi-platform-build).
 
 ## Tech Stack
 
@@ -64,6 +66,10 @@ Output: `dist/git-diff-viewer_<version>_amd64.deb`
 ├── package.json   # Dependencies and build config
 └── LICENSE        # MIT
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
 ## License
 
