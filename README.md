@@ -2,6 +2,8 @@
 
 A minimal, lightweight GitHub Desktop-style app for browsing git repositories, viewing diffs, and making commits. Built with Electron.
 
+Built originally for Ubuntu/Linux, where [GitHub Desktop is not officially supported](https://github.com/desktop/desktop/issues/1525). Works on macOS and Windows too.
+
 ![screenshot](screenshot.png)
 
 ## Features
