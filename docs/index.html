@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Git Diff Viewer — A lightweight GitHub Desktop alternative</title>
+  <meta name="description" content="A minimal, lightweight GitHub Desktop-style app for browsing git repos, viewing diffs, staging files, and committing. Built for Linux, works everywhere.">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f6f8fa;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --text-dim: #656d76;
+      --accent: #0969da;
+      --green: #1a7f37;
+      --red: #cf222e;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+      line-height: 1.6;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      padding: 80px 24px 48px;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      letter-spacing: -0.5px;
+    }
+    .hero .tagline {
+      font-size: 1.2rem;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+    .hero .motivation {
+      font-size: 0.95rem;
+      color: var(--text-dim);
+      margin-bottom: 32px;
+    }
+    .hero .motivation a { color: var(--text-dim); text-decoration: underline; }
+
+    /* CTA buttons */
+    .cta {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 48px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { text-decoration: none; opacity: 0.85; }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    /* Screenshot */
+    .screenshot {
+      max-width: 960px;
+      margin: 0 auto 64px;
+      padding: 0 24px;
+    }
+    .screenshot img {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+    }
+
+    /* Features */
+    .features {
+      max-width: 880px;
+      margin: 0 auto 64px;
+      padding: 0 24px;
+    }
+    .features h2 {
+      text-align: center;
+      font-size: 1.6rem;
+      margin-bottom: 32px;
+    }
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 24px;
+    }
+    .feature {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .feature h3 {
+      font-size: 1rem;
+      margin-bottom: 6px;
+    }
+    .feature p {
+      font-size: 0.9rem;
+      color: var(--text-dim);
+    }
+
+    /* Download */
+    .download {
+      max-width: 720px;
+      margin: 0 auto 64px;
+      padding: 0 24px;
+      text-align: center;
+    }
+    .download h2 {
+      font-size: 1.6rem;
+      margin-bottom: 8px;
+    }
+    .download .sub {
+      color: var(--text-dim);
+      margin-bottom: 24px;
+    }
+    .download-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      text-align: center;
+    }
+    .download-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px 16px;
+    }
+    .download-card .platform {
+      font-weight: 600;
+      font-size: 1.05rem;
+      margin-bottom: 4px;
+    }
+    .download-card .format {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-bottom: 12px;
+    }
+    .download-card .btn { font-size: 0.9rem; padding: 8px 18px; }
+
+    /* Tech */
+    .tech {
+      max-width: 720px;
+      margin: 0 auto 64px;
+      padding: 0 24px;
+      text-align: center;
+    }
+    .tech h2 {
+      font-size: 1.6rem;
+      margin-bottom: 16px;
+    }
+    .tech-list {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      flex-wrap: wrap;
+      list-style: none;
+    }
+    .tech-list li {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 0.9rem;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      padding: 32px 24px;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+    footer a { color: var(--text-dim); }
+
+    @media (max-width: 600px) {
+      .hero { padding: 48px 16px 32px; }
+      .hero h1 { font-size: 1.8rem; }
+      .hero .tagline { font-size: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <section class="hero">
+    <h1>Git Diff Viewer</h1>
+    <p class="tagline">A minimal, lightweight GitHub Desktop-style app for viewing diffs, staging files, and committing.</p>
+    <p class="motivation">Built for Linux, where <a href="https://github.com/desktop/desktop/issues/1525">GitHub Desktop isn't officially available</a>. Works on macOS and Windows too.</p>
+    <div class="cta">
+      <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest" class="btn btn-primary">Download</a>
+      <a href="https://github.com/sameerjoshi/git-diff-viewer" class="btn btn-secondary">View on GitHub</a>
+    </div>
+  </section>
+
+  <section class="screenshot">
+    <img src="screenshot.png" alt="Git Diff Viewer showing changed files and unified diff view" />
+  </section>
+
+  <section class="features">
+    <h2>Features</h2>
+    <div class="feature-grid">
+      <div class="feature">
+        <h3>Unified diff view</h3>
+        <p>Syntax-highlighted additions and deletions, just like GitHub.</p>
+      </div>
+      <div class="feature">
+        <h3>Stage and commit</h3>
+        <p>Stage individual files or all at once. Commit with summary and description.</p>
+      </div>
+      <div class="feature">
+        <h3>Branch management</h3>
+        <p>Switch branches, create new ones. Searchable dropdown with all local branches.</p>
+      </div>
+      <div class="feature">
+        <h3>Real-time watching</h3>
+        <p>File list auto-refreshes when files change on disk. No manual refresh needed.</p>
+      </div>
+      <div class="feature">
+        <h3>Recent repositories</h3>
+        <p>Quick access to previously opened repos. Open any folder via native picker.</p>
+      </div>
+      <div class="feature">
+        <h3>No bloat</h3>
+        <p>Vanilla HTML/CSS/JS. No framework, no build step. Two runtime dependencies.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="download">
+    <h2>Download</h2>
+    <p class="sub">Grab the latest release for your platform.</p>
+    <div class="download-grid">
+      <div class="download-card">
+        <div class="platform">macOS</div>
+        <div class="format">.dmg (Apple Silicon)</div>
+        <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest" class="btn btn-primary">Download</a>
+      </div>
+      <div class="download-card">
+        <div class="platform">Windows</div>
+        <div class="format">.exe installer</div>
+        <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest" class="btn btn-primary">Download</a>
+      </div>
+      <div class="download-card">
+        <div class="platform">Linux</div>
+        <div class="format">.deb (Ubuntu/Debian)</div>
+        <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest" class="btn btn-primary">Download</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="tech">
+    <h2>Built with</h2>
+    <ul class="tech-list">
+      <li>Electron</li>
+      <li>simple-git</li>
+      <li>chokidar</li>
+      <li>Vanilla JS</li>
+    </ul>
+  </section>
+
+  <footer>
+    <a href="https://github.com/sameerjoshi/git-diff-viewer">GitHub</a> &middot;
+    <a href="https://github.com/sameerjoshi/git-diff-viewer/releases">Releases</a> &middot;
+    MIT License
+  </footer>
+
+</body>
+</html>
