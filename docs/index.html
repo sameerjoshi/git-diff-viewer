@@ -5,18 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Git Diff Viewer — A lightweight GitHub Desktop alternative</title>
   <meta name="description" content="A minimal, lightweight GitHub Desktop-style app for browsing git repos, viewing diffs, staging files, and committing. Built for Linux, works everywhere.">
+  <meta property="og:title" content="Git Diff Viewer">
+  <meta property="og:description" content="Lightweight GitHub Desktop alternative. View diffs, stage files, commit — built for Linux, works everywhere.">
+  <meta property="og:image" content="screenshot.png">
   <style>
     :root {
       --bg: #ffffff;
       --surface: #f6f8fa;
+      --surface-alt: #f0f3f6;
       --border: #d0d7de;
+      --border-light: #e8ecf0;
       --text: #1f2328;
       --text-dim: #656d76;
+      --text-lighter: #8b949e;
       --accent: #0969da;
+      --accent-light: #ddf4ff;
       --green: #1a7f37;
+      --green-bg: #dafbe1;
       --red: #cf222e;
+      --red-bg: #ffebe9;
+      --hero-gradient: linear-gradient(145deg, #0d1117 0%, #161b22 50%, #1c2128 100%);
+      --code-bg: #0d1117;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
       color: var(--text);
@@ -26,268 +38,703 @@
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
-    /* Hero */
-    .hero {
-      text-align: center;
-      padding: 80px 24px 48px;
-      max-width: 720px;
+    /* ---- Navbar ---- */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-light);
+      padding: 0 24px;
+    }
+    .navbar-inner {
+      max-width: 1100px;
       margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+    }
+    .navbar-brand {
+      font-weight: 700;
+      font-size: 1rem;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .navbar-brand:hover { text-decoration: none; }
+    .navbar-brand svg { width: 24px; height: 24px; }
+    .navbar-links {
+      display: flex;
+      gap: 24px;
+      list-style: none;
+      font-size: 0.9rem;
+    }
+    .navbar-links a { color: var(--text-dim); }
+    .navbar-links a:hover { color: var(--text); text-decoration: none; }
+
+    /* ---- Hero ---- */
+    .hero {
+      background: var(--hero-gradient);
+      color: #e6edf3;
+      padding: 96px 24px 64px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -200px; right: -200px;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(9,105,218,0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero::after {
+      content: '';
+      position: absolute;
+      bottom: -200px; left: -200px;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(26,127,55,0.1) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-inner { max-width: 720px; margin: 0 auto; position: relative; z-index: 1; }
+    .hero-badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 0.8rem;
+      color: #8b949e;
+      margin-bottom: 24px;
+      letter-spacing: 0.3px;
     }
     .hero h1 {
-      font-size: 2.5rem;
-      font-weight: 700;
-      margin-bottom: 16px;
-      letter-spacing: -0.5px;
+      font-size: 3.2rem;
+      font-weight: 800;
+      line-height: 1.15;
+      margin-bottom: 20px;
+      letter-spacing: -1px;
+      color: #fff;
     }
+    .hero h1 span { color: var(--accent); }
     .hero .tagline {
       font-size: 1.2rem;
-      color: var(--text-dim);
+      color: #8b949e;
       margin-bottom: 12px;
+      max-width: 540px;
+      margin-left: auto;
+      margin-right: auto;
     }
     .hero .motivation {
-      font-size: 0.95rem;
-      color: var(--text-dim);
-      margin-bottom: 32px;
+      font-size: 0.9rem;
+      color: #6e7681;
+      margin-bottom: 36px;
     }
-    .hero .motivation a { color: var(--text-dim); text-decoration: underline; }
-
-    /* CTA buttons */
+    .hero .motivation a { color: #6e7681; text-decoration: underline; }
     .cta {
       display: flex;
       gap: 12px;
       justify-content: center;
       flex-wrap: wrap;
-      margin-bottom: 48px;
     }
     .btn {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 24px;
+      padding: 12px 28px;
       border-radius: 8px;
       font-size: 1rem;
       font-weight: 600;
-      transition: opacity 0.15s;
+      transition: all 0.2s;
+      cursor: pointer;
     }
-    .btn:hover { text-decoration: none; opacity: 0.85; }
+    .btn:hover { text-decoration: none; transform: translateY(-1px); }
     .btn-primary {
       background: var(--accent);
       color: #fff;
+      box-shadow: 0 4px 16px rgba(9,105,218,0.3);
     }
+    .btn-primary:hover { box-shadow: 0 6px 24px rgba(9,105,218,0.4); }
     .btn-secondary {
-      background: var(--surface);
-      color: var(--text);
-      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      color: #e6edf3;
+      border: 1px solid rgba(255,255,255,0.15);
     }
+    .btn-secondary:hover { background: rgba(255,255,255,0.1); }
+    .btn-sm { padding: 8px 18px; font-size: 0.9rem; }
 
-    /* Screenshot */
-    .screenshot {
+    /* ---- Screenshot ---- */
+    .screenshot-section {
+      margin-top: -32px;
+      padding: 0 24px 80px;
+      position: relative;
+      z-index: 2;
+    }
+    .screenshot-frame {
       max-width: 960px;
-      margin: 0 auto 64px;
-      padding: 0 24px;
+      margin: 0 auto;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.06);
     }
-    .screenshot img {
+    .screenshot-frame img {
       width: 100%;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+      display: block;
     }
 
-    /* Features */
-    .features {
-      max-width: 880px;
-      margin: 0 auto 64px;
-      padding: 0 24px;
+    /* ---- Section shared ---- */
+    .section {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 80px 24px;
     }
-    .features h2 {
+    .section-header {
       text-align: center;
-      font-size: 1.6rem;
-      margin-bottom: 32px;
+      margin-bottom: 48px;
     }
+    .section-header h2 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+    .section-header p {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 540px;
+      margin: 0 auto;
+    }
+    .section-divider {
+      border: none;
+      border-top: 1px solid var(--border-light);
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    /* ---- Features ---- */
     .feature-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 24px;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
     }
     .feature {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 20px;
+      padding: 28px 24px;
+      border-radius: 12px;
+      border: 1px solid var(--border-light);
+      transition: border-color 0.2s, box-shadow 0.2s;
     }
+    .feature:hover {
+      border-color: var(--border);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+    }
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+      font-size: 1.2rem;
+    }
+    .feature-icon.blue { background: var(--accent-light); color: var(--accent); }
+    .feature-icon.green { background: var(--green-bg); color: var(--green); }
+    .feature-icon.red { background: var(--red-bg); color: var(--red); }
     .feature h3 {
       font-size: 1rem;
+      font-weight: 600;
       margin-bottom: 6px;
     }
     .feature p {
       font-size: 0.9rem;
       color: var(--text-dim);
+      line-height: 1.5;
     }
 
-    /* Download */
-    .download {
-      max-width: 720px;
-      margin: 0 auto 64px;
-      padding: 0 24px;
-      text-align: center;
-    }
-    .download h2 {
-      font-size: 1.6rem;
-      margin-bottom: 8px;
-    }
-    .download .sub {
-      color: var(--text-dim);
-      margin-bottom: 24px;
-    }
+    /* ---- Download ---- */
+    .download-section { background: var(--surface); }
     .download-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px;
-      text-align: center;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
     }
     .download-card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 24px 16px;
+      background: var(--bg);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 32px 24px;
+      text-align: center;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .download-card:hover {
+      border-color: var(--border);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+    }
+    .download-card .icon {
+      font-size: 2rem;
+      margin-bottom: 12px;
     }
     .download-card .platform {
       font-weight: 600;
-      font-size: 1.05rem;
+      font-size: 1.1rem;
       margin-bottom: 4px;
     }
     .download-card .format {
       font-size: 0.85rem;
       color: var(--text-dim);
-      margin-bottom: 12px;
-    }
-    .download-card .btn { font-size: 0.9rem; padding: 8px 18px; }
-
-    /* Tech */
-    .tech {
-      max-width: 720px;
-      margin: 0 auto 64px;
-      padding: 0 24px;
-      text-align: center;
-    }
-    .tech h2 {
-      font-size: 1.6rem;
       margin-bottom: 16px;
     }
-    .tech-list {
-      display: flex;
-      gap: 24px;
-      justify-content: center;
-      flex-wrap: wrap;
-      list-style: none;
+
+    /* ---- Docs ---- */
+    .docs-section { background: var(--bg); }
+    .docs-grid {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 48px;
     }
-    .tech-list li {
+    .docs-nav {
+      position: sticky;
+      top: 80px;
+      align-self: start;
+    }
+    .docs-nav ul {
+      list-style: none;
+      border-left: 2px solid var(--border-light);
+    }
+    .docs-nav li a {
+      display: block;
+      padding: 6px 0 6px 16px;
+      font-size: 0.9rem;
+      color: var(--text-dim);
+      margin-left: -2px;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .docs-nav li a:hover {
+      color: var(--text);
+      border-left-color: var(--border);
+      text-decoration: none;
+    }
+    .docs-content h3 {
+      font-size: 1.3rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-light);
+      margin-top: 40px;
+    }
+    .docs-content h3:first-child {
+      margin-top: 0;
+      border-top: none;
+      padding-top: 0;
+    }
+    .docs-content p {
+      margin-bottom: 12px;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+    .docs-content ul, .docs-content ol {
+      margin-bottom: 12px;
+      padding-left: 24px;
+      font-size: 0.95rem;
+    }
+    .docs-content li { margin-bottom: 6px; }
+    .docs-content code {
       background: var(--surface);
-      border: 1px solid var(--border);
+      border: 1px solid var(--border-light);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+    }
+    .docs-content pre {
+      background: var(--code-bg);
+      color: #e6edf3;
+      padding: 16px 20px;
       border-radius: 8px;
-      padding: 8px 16px;
+      overflow-x: auto;
+      margin-bottom: 16px;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+    }
+    .docs-content pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: inherit;
+      color: inherit;
+    }
+    .docs-content .note {
+      background: var(--accent-light);
+      border-left: 3px solid var(--accent);
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 16px;
       font-size: 0.9rem;
     }
+    .docs-content .warning {
+      background: #fff8c5;
+      border-left: 3px solid #9a6700;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+    }
+    .docs-content .kbd {
+      display: inline-block;
+      padding: 2px 7px;
+      font-size: 0.8rem;
+      font-family: inherit;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      box-shadow: 0 1px 0 var(--border);
+    }
 
-    /* Footer */
+    /* ---- Architecture ---- */
+    .arch-diagram {
+      background: var(--surface);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 32px;
+      margin-bottom: 16px;
+      text-align: center;
+    }
+    .arch-flow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      flex-wrap: wrap;
+    }
+    .arch-box {
+      padding: 14px 22px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      white-space: nowrap;
+    }
+    .arch-box.renderer { background: var(--accent-light); color: var(--accent); border: 1px solid rgba(9,105,218,0.2); }
+    .arch-box.preload { background: #fff8c5; color: #7d6008; border: 1px solid rgba(154,103,0,0.2); }
+    .arch-box.main { background: var(--green-bg); color: var(--green); border: 1px solid rgba(26,127,55,0.2); }
+    .arch-box.helpers { background: var(--red-bg); color: var(--red); border: 1px solid rgba(207,34,46,0.2); }
+    .arch-arrow {
+      color: var(--text-lighter);
+      font-size: 1.3rem;
+      padding: 0 12px;
+    }
+
+    /* ---- Tech ---- */
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      text-align: center;
+    }
+    .tech-item {
+      background: var(--surface);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 24px 16px;
+      transition: border-color 0.2s;
+    }
+    .tech-item:hover { border-color: var(--border); }
+    .tech-item .name { font-weight: 600; font-size: 0.95rem; margin-bottom: 4px; }
+    .tech-item .role { font-size: 0.8rem; color: var(--text-dim); }
+
+    /* ---- Footer ---- */
     footer {
       text-align: center;
-      padding: 32px 24px;
-      border-top: 1px solid var(--border);
+      padding: 40px 24px;
+      border-top: 1px solid var(--border-light);
       color: var(--text-dim);
       font-size: 0.85rem;
     }
     footer a { color: var(--text-dim); }
+    footer a:hover { color: var(--text); }
+    footer .links { margin-bottom: 8px; }
+    footer .links a { margin: 0 12px; }
 
-    @media (max-width: 600px) {
-      .hero { padding: 48px 16px 32px; }
-      .hero h1 { font-size: 1.8rem; }
+    /* ---- Responsive ---- */
+    @media (max-width: 768px) {
+      .hero { padding: 64px 16px 48px; }
+      .hero h1 { font-size: 2.2rem; }
       .hero .tagline { font-size: 1rem; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .download-grid { grid-template-columns: 1fr; }
+      .tech-grid { grid-template-columns: repeat(2, 1fr); }
+      .docs-grid { grid-template-columns: 1fr; }
+      .docs-nav { display: none; }
+      .navbar-links { gap: 14px; font-size: 0.8rem; }
+      .arch-flow { flex-direction: column; gap: 8px; }
+      .arch-arrow { transform: rotate(90deg); padding: 4px 0; }
     }
   </style>
 </head>
 <body>
 
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="navbar-inner">
+      <a href="#" class="navbar-brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M3 12h18M6 6l12 12M18 6L6 18" stroke-linecap="round" opacity="0.3"/><path d="M9 6h6M9 10h6M9 14h6M9 18h6" stroke-linecap="round"/></svg>
+        Git Diff Viewer
+      </a>
+      <ul class="navbar-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#download">Download</a></li>
+        <li><a href="#docs">Docs</a></li>
+        <li><a href="https://github.com/sameerjoshi/git-diff-viewer">GitHub</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- Hero -->
   <section class="hero">
-    <h1>Git Diff Viewer</h1>
-    <p class="tagline">A minimal, lightweight GitHub Desktop-style app for viewing diffs, staging files, and committing.</p>
-    <p class="motivation">Built for Linux, where <a href="https://github.com/desktop/desktop/issues/1525">GitHub Desktop isn't officially available</a>. Works on macOS and Windows too.</p>
-    <div class="cta">
-      <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest" class="btn btn-primary">Download</a>
-      <a href="https://github.com/sameerjoshi/git-diff-viewer" class="btn btn-secondary">View on GitHub</a>
+    <div class="hero-inner">
+      <div class="hero-badge">Open source &middot; MIT License &middot; v1.0.0</div>
+      <h1>A lightweight <span>GitHub Desktop</span> alternative</h1>
+      <p class="tagline">View diffs, stage files, and commit — without the overhead. Minimal, fast, and works on every platform.</p>
+      <p class="motivation">Built for Linux, where <a href="https://github.com/desktop/desktop/issues/1525">GitHub Desktop isn't officially available</a>.</p>
+      <div class="cta">
+        <a href="#download" class="btn btn-primary">Download for free</a>
+        <a href="https://github.com/sameerjoshi/git-diff-viewer" class="btn btn-secondary">View source</a>
+      </div>
     </div>
   </section>
 
-  <section class="screenshot">
-    <img src="screenshot.png" alt="Git Diff Viewer showing changed files and unified diff view" />
+  <!-- Screenshot -->
+  <section class="screenshot-section">
+    <div class="screenshot-frame">
+      <img src="screenshot.png" alt="Git Diff Viewer — file list on the left, unified diff on the right" />
+    </div>
   </section>
 
-  <section class="features">
-    <h2>Features</h2>
+  <!-- Features -->
+  <section class="section" id="features">
+    <div class="section-header">
+      <h2>Everything you need, nothing you don't</h2>
+      <p>A focused git GUI that does the basics well.</p>
+    </div>
     <div class="feature-grid">
       <div class="feature">
+        <div class="feature-icon blue">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
         <h3>Unified diff view</h3>
-        <p>Syntax-highlighted additions and deletions, just like GitHub.</p>
+        <p>Syntax-highlighted additions and deletions with line numbers, just like GitHub.</p>
       </div>
       <div class="feature">
+        <div class="feature-icon green">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M5 10l3 3 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
         <h3>Stage and commit</h3>
-        <p>Stage individual files or all at once. Commit with summary and description.</p>
+        <p>Stage individual files or all at once with checkboxes. Commit with summary and description.</p>
       </div>
       <div class="feature">
+        <div class="feature-icon blue">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M5 4v12M10 4v12M15 4v6M15 14v2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="5" cy="4" r="1.5" fill="currentColor"/><circle cx="10" cy="4" r="1.5" fill="currentColor"/><circle cx="15" cy="4" r="1.5" fill="currentColor"/></svg>
+        </div>
         <h3>Branch management</h3>
         <p>Switch branches, create new ones. Searchable dropdown with all local branches.</p>
       </div>
       <div class="feature">
+        <div class="feature-icon green">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 2v16M2 10h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
         <h3>Real-time watching</h3>
         <p>File list auto-refreshes when files change on disk. No manual refresh needed.</p>
       </div>
       <div class="feature">
+        <div class="feature-icon red">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M4 4h12v14H4zM8 4V2h4v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 8h6M7 11h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
         <h3>Recent repositories</h3>
         <p>Quick access to previously opened repos. Open any folder via native picker.</p>
       </div>
       <div class="feature">
+        <div class="feature-icon red">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 17V3h14v14H3z" stroke="currentColor" stroke-width="1.5"/><path d="M7 8h6M7 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
         <h3>No bloat</h3>
-        <p>Vanilla HTML/CSS/JS. No framework, no build step. Two runtime dependencies.</p>
+        <p>Vanilla HTML/CSS/JS. No framework, no build step for the UI. Two runtime dependencies total.</p>
       </div>
     </div>
   </section>
 
-  <section class="download">
-    <h2>Download</h2>
-    <p class="sub">Grab the latest release for your platform.</p>
+  <hr class="section-divider">
+
+  <!-- Download -->
+  <section class="section download-section" id="download">
+    <div class="section-header">
+      <h2>Download</h2>
+      <p>Grab the latest release for your platform.</p>
+    </div>
     <div class="download-grid">
       <div class="download-card">
+        <div class="icon">&#63743;</div>
         <div class="platform">macOS</div>
-        <div class="format">.dmg (Apple Silicon)</div>
-        <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest" class="btn btn-primary">Download</a>
+        <div class="format">.dmg &middot; Apple Silicon</div>
+        <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest" class="btn btn-primary btn-sm">Download</a>
       </div>
       <div class="download-card">
+        <div class="icon">&#8862;</div>
         <div class="platform">Windows</div>
-        <div class="format">.exe installer</div>
-        <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest" class="btn btn-primary">Download</a>
+        <div class="format">.exe &middot; Installer</div>
+        <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest" class="btn btn-primary btn-sm">Download</a>
       </div>
       <div class="download-card">
+        <div class="icon">&#9881;</div>
         <div class="platform">Linux</div>
-        <div class="format">.deb (Ubuntu/Debian)</div>
-        <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest" class="btn btn-primary">Download</a>
+        <div class="format">.deb &middot; Ubuntu/Debian</div>
+        <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest" class="btn btn-primary btn-sm">Download</a>
       </div>
     </div>
   </section>
 
-  <section class="tech">
-    <h2>Built with</h2>
-    <ul class="tech-list">
-      <li>Electron</li>
-      <li>simple-git</li>
-      <li>chokidar</li>
-      <li>Vanilla JS</li>
-    </ul>
+  <hr class="section-divider">
+
+  <!-- Documentation -->
+  <section class="section docs-section" id="docs">
+    <div class="section-header">
+      <h2>Documentation</h2>
+      <p>Get started, understand the architecture, and contribute.</p>
+    </div>
+    <div class="docs-grid">
+      <nav class="docs-nav">
+        <ul>
+          <li><a href="#docs-install">Installation</a></li>
+          <li><a href="#docs-usage">Usage</a></li>
+          <li><a href="#docs-shortcuts">Keyboard shortcuts</a></li>
+          <li><a href="#docs-architecture">Architecture</a></li>
+          <li><a href="#docs-building">Building from source</a></li>
+          <li><a href="#docs-testing">Testing</a></li>
+          <li><a href="#docs-contributing">Contributing</a></li>
+        </ul>
+      </nav>
+      <div class="docs-content">
+
+        <!-- Installation -->
+        <h3 id="docs-install">Installation</h3>
+        <p><strong>macOS:</strong> Download the <code>.dmg</code> from <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest">Releases</a>, open it, and drag the app to Applications. On first launch you may need to right-click the app and choose Open to bypass Gatekeeper since the app is ad-hoc signed.</p>
+        <p><strong>Windows:</strong> Download the <code>.exe</code> installer and run it. The app installs and launches automatically.</p>
+        <p><strong>Linux (Ubuntu/Debian):</strong></p>
+        <pre><code>sudo dpkg -i git-diff-viewer_1.0.0_arm64.deb</code></pre>
+        <p><strong>From source:</strong></p>
+        <pre><code>git clone https://github.com/sameerjoshi/git-diff-viewer.git
+cd git-diff-viewer
+npm install
+npm start</code></pre>
+        <div class="note">Requires <strong>Node.js 18+</strong> and <strong>git</strong> installed on your system.</div>
+
+        <!-- Usage -->
+        <h3 id="docs-usage">Usage</h3>
+        <ol>
+          <li><strong>Open a repository</strong> — click "Open Repository" or press <span class="kbd">Ctrl</span>+<span class="kbd">O</span> (<span class="kbd">Cmd</span>+<span class="kbd">O</span> on macOS) to select a folder. Recently opened repos appear in a quick-access list.</li>
+          <li><strong>View changes</strong> — the left sidebar shows all changed files with status badges (<code>MODIFIED</code>, <code>UNTRACKED</code>, <code>DELETED</code>, <code>RENAMED</code>, <code>NEW</code>). Click any file to see its unified diff on the right.</li>
+          <li><strong>Stage files</strong> — use the checkbox next to each file to stage it, or check "ALL" to stage everything. Clicking an already-staged file will unstage it.</li>
+          <li><strong>Commit</strong> — type a summary (required) and optional description at the bottom, then click "Commit to <em>branch</em>".</li>
+          <li><strong>Switch branches</strong> — click the branch dropdown in the header, search or select a branch. Type a new name and press Enter to create and switch to a new branch.</li>
+        </ol>
+        <p>The file list refreshes automatically when files change on disk — no need to manually refresh.</p>
+
+        <!-- Keyboard shortcuts -->
+        <h3 id="docs-shortcuts">Keyboard shortcuts</h3>
+        <p><span class="kbd">Ctrl</span>+<span class="kbd">O</span> / <span class="kbd">Cmd</span>+<span class="kbd">O</span> — Open a repository</p>
+
+        <!-- Architecture -->
+        <h3 id="docs-architecture">Architecture</h3>
+        <p>The app follows strict Electron process separation with four files:</p>
+        <div class="arch-diagram">
+          <div class="arch-flow">
+            <div class="arch-box renderer">index.html<br><small>Renderer (UI)</small></div>
+            <div class="arch-arrow">&rarr;</div>
+            <div class="arch-box preload">preload.js<br><small>Context Bridge</small></div>
+            <div class="arch-arrow">&rarr;</div>
+            <div class="arch-box main">main.js<br><small>IPC + Electron</small></div>
+            <div class="arch-arrow">&rarr;</div>
+            <div class="arch-box helpers">git-helpers.js<br><small>Business Logic</small></div>
+          </div>
+        </div>
+        <ul>
+          <li><strong>index.html</strong> — single-file renderer containing all markup, CSS, and JavaScript. No framework, no build step.</li>
+          <li><strong>preload.js</strong> — context bridge that exposes <code>window.gitAPI</code> with 12 methods and 1 event listener.</li>
+          <li><strong>main.js</strong> — Electron main process handling IPC, file watching (chokidar), and window lifecycle.</li>
+          <li><strong>git-helpers.js</strong> — pure business logic extracted for testability: file status dedup, recent repos CRUD, synthetic diffs, error formatting.</li>
+        </ul>
+        <p>Data flows left-to-right: renderer calls <code>window.gitAPI.*</code>, preload forwards via <code>ipcRenderer.invoke</code>, main.js handles and returns <code>{ ok, data }</code> or <code>{ error }</code> objects. No thrown exceptions cross the IPC boundary.</p>
+        <p>File watching is started when <code>get-status</code> is called — two chokidar watchers monitor the working tree and <code>.git/</code> internals, pushing a <code>repo-files-changed</code> event to the renderer which triggers a status refresh.</p>
+
+        <!-- Building -->
+        <h3 id="docs-building">Building from source</h3>
+        <pre><code>npm run build        # Linux (.deb)
+npm run build:mac    # macOS (.dmg)
+npm run build:win    # Windows (.exe)</code></pre>
+        <div class="warning">Cross-platform builds may require additional tools. macOS builds need to run on macOS. See the <a href="https://www.electron.build/multi-platform-build">electron-builder docs</a>.</div>
+
+        <!-- Testing -->
+        <h3 id="docs-testing">Testing</h3>
+        <p>Unit tests cover the extracted business logic in <code>git-helpers.js</code>:</p>
+        <pre><code>npm test             # run all tests (Jest)
+npm run test:watch   # run in watch mode</code></pre>
+        <p>35 tests covering file status deduplication, synthetic diff generation, branch error formatting, recent repos CRUD, and window state persistence.</p>
+
+        <!-- Contributing -->
+        <h3 id="docs-contributing">Contributing</h3>
+        <p>Contributions are welcome. See <a href="https://github.com/sameerjoshi/git-diff-viewer/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a> for guidelines.</p>
+        <ol>
+          <li>Fork the repo and create a feature branch</li>
+          <li>Make your changes — keep the renderer as plain HTML/JS/CSS (no frameworks)</li>
+          <li>Run <code>npm test</code> and verify the app launches with <code>npm start</code></li>
+          <li>Open a PR with a clear description of what and why</li>
+        </ol>
+
+      </div>
+    </div>
   </section>
 
+  <hr class="section-divider">
+
+  <!-- Tech stack -->
+  <section class="section">
+    <div class="section-header">
+      <h2>Built with</h2>
+    </div>
+    <div class="tech-grid">
+      <div class="tech-item">
+        <div class="name">Electron</div>
+        <div class="role">Desktop shell</div>
+      </div>
+      <div class="tech-item">
+        <div class="name">simple-git</div>
+        <div class="role">Git operations</div>
+      </div>
+      <div class="tech-item">
+        <div class="name">chokidar</div>
+        <div class="role">File watching</div>
+      </div>
+      <div class="tech-item">
+        <div class="name">Vanilla JS</div>
+        <div class="role">Zero frameworks</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
   <footer>
-    <a href="https://github.com/sameerjoshi/git-diff-viewer">GitHub</a> &middot;
-    <a href="https://github.com/sameerjoshi/git-diff-viewer/releases">Releases</a> &middot;
-    MIT License
+    <div class="links">
+      <a href="https://github.com/sameerjoshi/git-diff-viewer">GitHub</a>
+      <a href="https://github.com/sameerjoshi/git-diff-viewer/releases">Releases</a>
+      <a href="https://github.com/sameerjoshi/git-diff-viewer/blob/main/CONTRIBUTING.md">Contributing</a>
+      <a href="https://github.com/sameerjoshi/git-diff-viewer/blob/main/LICENSE">License</a>
+    </div>
+    <p>MIT License &middot; Built by <a href="https://github.com/sameerjoshi">Sameer Joshi</a></p>
   </footer>
 
 </body>
