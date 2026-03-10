@@ -411,14 +411,15 @@
       align-items: center;
       justify-content: center;
       gap: 0;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
     }
     .arch-box {
       padding: 14px 22px;
       border-radius: 8px;
       font-weight: 600;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       white-space: nowrap;
+      flex-shrink: 0;
     }
     .arch-box.renderer { background: var(--accent-light); color: var(--accent); border: 1px solid rgba(9,105,218,0.2); }
     .arch-box.preload { background: #fff8c5; color: #7d6008; border: 1px solid rgba(154,103,0,0.2); }
@@ -426,8 +427,9 @@
     .arch-box.helpers { background: var(--red-bg); color: var(--red); border: 1px solid rgba(207,34,46,0.2); }
     .arch-arrow {
       color: var(--text-lighter);
-      font-size: 1.3rem;
-      padding: 0 12px;
+      font-size: 1.2rem;
+      padding: 0 10px;
+      flex-shrink: 0;
     }
 
     /* ---- Tech ---- */
@@ -472,8 +474,9 @@
       .docs-grid { grid-template-columns: 1fr; }
       .docs-nav { display: none; }
       .navbar-links { gap: 14px; font-size: 0.8rem; }
-      .arch-flow { flex-direction: column; gap: 8px; }
+      .arch-flow { flex-direction: column; flex-wrap: wrap; gap: 8px; }
       .arch-arrow { transform: rotate(90deg); padding: 4px 0; }
+      .arch-box { font-size: 0.8rem; padding: 10px 16px; }
     }
   </style>
 </head>
