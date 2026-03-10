@@ -1,6 +1,12 @@
-# Git Diff Viewer
+<p align="center">
+  <img src="build/icon.png" width="128" alt="Git Diff Viewer icon">
+</p>
 
+<h1 align="center">Git Diff Viewer</h1>
+
+<p align="center">
 A minimal, lightweight GitHub Desktop-style app for browsing git repositories, viewing diffs, and making commits. Built with Electron. Zero frameworks, zero build steps.
+</p>
 
 Built originally for Ubuntu/Linux, where [GitHub Desktop is not officially supported](https://github.com/desktop/desktop/issues/1525). Works on macOS and Windows too.
 
