@@ -8,6 +8,13 @@
 A minimal, lightweight GitHub Desktop-style app for browsing git repositories, viewing diffs, and making commits. Built with Electron. Zero frameworks, zero build steps.
 </p>
 
+<p align="center">
+  <a href="https://github.com/sameerjoshi/git-diff-viewer/releases/latest"><img src="https://img.shields.io/github/v/release/sameerjoshi/git-diff-viewer?style=flat-square" alt="Latest Release"></a>
+  <a href="https://github.com/sameerjoshi/git-diff-viewer/blob/main/LICENSE"><img src="https://img.shields.io/github/license/sameerjoshi/git-diff-viewer?style=flat-square" alt="License"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue?style=flat-square" alt="Platform">
+  <img src="https://img.shields.io/badge/electron-40-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron">
+</p>
+
 Built originally for Ubuntu/Linux, where [GitHub Desktop is not officially supported](https://github.com/desktop/desktop/issues/1525). Works on macOS and Windows too.
 
 ![screenshot](screenshot.png)
