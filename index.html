@@ -265,10 +265,24 @@
     .file-status.renamed { background: rgba(88,166,255,0.2); color: var(--accent); }
     .file-status.new { background: rgba(63,185,80,0.2); color: var(--green); }
     .file-name {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .file-dir {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .file-base {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       color: var(--text);
+      font-weight: 700;
     }
 
     /* Resize handle */
@@ -539,6 +553,7 @@
     let currentRepo = null;
     let currentFiles = [];
     let sidebarWidth = 300;
+    let selectedFilePath = null;
 
     const mainContent = document.getElementById('mainContent');
     const openBtn = document.getElementById('openBtn');
@@ -627,12 +642,13 @@
     function renderApp() {
       const stagedCount = currentFiles.filter((f) => f.staged).length;
       const allStaged = currentFiles.length > 0 && stagedCount === currentFiles.length;
+      const fileElements = new Map();
 
       mainContent.innerHTML = `
         <div class="sidebar" id="sidebar" style="width:${sidebarWidth}px">
           <div class="sidebar-header">
             <div style="display:flex;align-items:center;justify-content:space-between;">
-              <span>Changed files (${currentFiles.length})</span>
+              <span>Changed files (${stagedCount ? stagedCount + ' of ' : ''}${currentFiles.length}${stagedCount ? ' staged' : ''})</span>
               <div class="select-all-row">
                 <input type="checkbox" class="file-check" id="selectAllCheck" ${allStaged ? 'checked' : ''} ${currentFiles.length === 0 ? 'disabled' : ''}>
                 <label for="selectAllCheck">All</label>
@@ -659,6 +675,7 @@
       const fileList = document.getElementById('fileList');
 
       if (currentFiles.length === 0) {
+        selectedFilePath = null;
         fileList.innerHTML = '<div style="padding:14px;color:var(--text-dim);font-size:13px;">No changes detected</div>';
         return;
       }
@@ -674,8 +691,14 @@
         checkbox.addEventListener('click', (e) => e.stopPropagation());
         checkbox.addEventListener('change', async () => {
           const cleanPath = file.path.includes('\u2192') ? file.path.split('\u2192')[1].trim() : file.path;
-          await window.gitAPI.stageFile(currentRepo, cleanPath, checkbox.checked);
-          await loadStatus();
+          const result = await window.gitAPI.stageFile(currentRepo, cleanPath, checkbox.checked);
+          if (result.error) {
+            checkbox.checked = !checkbox.checked;
+            const msgEl = document.getElementById('commitMessage');
+            if (msgEl) msgEl.innerHTML = `<div class="commit-error">${escapeHtml(result.error)}</div>`;
+            return;
+          }
+          await refreshStatusPreservingCommitInputs();
         });
 
         const statusSpan = document.createElement('span');
@@ -685,13 +708,84 @@
         const nameSpan = document.createElement('span');
         nameSpan.className = 'file-name';
         nameSpan.title = file.path;
-        nameSpan.textContent = file.path;
+
+        const { dirPath, baseName } = splitDisplayPath(file.path);
+
+        if (dirPath) {
+          const dirSpan = document.createElement('span');
+          dirSpan.className = 'file-dir';
+          dirSpan.textContent = dirPath;
+          nameSpan.appendChild(dirSpan);
+        }
+
+        const baseSpan = document.createElement('span');
+        baseSpan.className = 'file-base';
+        baseSpan.textContent = baseName;
+        nameSpan.appendChild(baseSpan);
 
         el.appendChild(checkbox);
         el.appendChild(statusSpan);
         el.appendChild(nameSpan);
         el.addEventListener('click', () => selectFile(file, el));
         fileList.appendChild(el);
+        fileElements.set(file.path, { file, el });
+      }
+
+      if (selectedFilePath) {
+        const selectedEntry = fileElements.get(selectedFilePath);
+        if (selectedEntry) {
+          void selectFile(selectedEntry.file, selectedEntry.el);
+        } else {
+          selectedFilePath = null;
+        }
+      }
+    }
+
+    function splitDisplayPath(filePath) {
+      if (filePath.includes('\u2192')) {
+        const [fromPath, toPath] = filePath.split('\u2192').map((part) => part.trim());
+        const fromParts = splitSinglePath(fromPath);
+        const toParts = splitSinglePath(toPath);
+
+        if (fromParts.dirPath === toParts.dirPath) {
+          return {
+            dirPath: fromParts.dirPath,
+            baseName: `${fromParts.baseName} \u2192 ${toParts.baseName}`,
+          };
+        }
+
+        return { dirPath: '', baseName: filePath };
+      }
+
+      return splitSinglePath(filePath);
+    }
+
+    function splitSinglePath(filePath) {
+      const slashIndex = filePath.lastIndexOf('/');
+      return {
+        dirPath: slashIndex >= 0 ? filePath.slice(0, slashIndex + 1) : '',
+        baseName: slashIndex >= 0 ? filePath.slice(slashIndex + 1) : filePath,
+      };
+    }
+
+    async function refreshStatusPreservingCommitInputs() {
+      const summaryEl = document.getElementById('commitSummary');
+      const descEl = document.getElementById('commitDesc');
+      const savedSummary = summaryEl ? summaryEl.value : '';
+      const savedDesc = descEl ? descEl.value : '';
+
+      await loadStatus();
+
+      const newSummary = document.getElementById('commitSummary');
+      const newDesc = document.getElementById('commitDesc');
+      const newBtn = document.getElementById('commitBtn');
+
+      if (newSummary) newSummary.value = savedSummary;
+      if (newDesc) newDesc.value = savedDesc;
+      if (newSummary && newBtn) {
+        const hasSummary = newSummary.value.trim().length > 0;
+        const hasStaged = currentFiles.some((f) => f.staged);
+        newBtn.disabled = !hasSummary || !hasStaged;
       }
     }
 
@@ -709,26 +803,29 @@
       }
 
       summaryInput.addEventListener('input', updateCommitBtn);
+
+      // Cmd/Ctrl+Enter to commit from summary or description
+      function handleCommitShortcut(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+          e.preventDefault();
+          if (!commitBtn.disabled) commitBtn.click();
+        }
+      }
+      summaryInput.addEventListener('keydown', handleCommitShortcut);
+      descInput.addEventListener('keydown', handleCommitShortcut);
+
       // Initial state
       updateCommitBtn();
 
       // Select all / deselect all
       selectAllCheck.addEventListener('change', async () => {
-        await window.gitAPI.stageAll(currentRepo, selectAllCheck.checked);
-        // Preserve commit message across refresh
-        const summary = summaryInput.value;
-        const desc = descInput.value;
-        await loadStatus();
-        document.getElementById('commitSummary').value = summary;
-        document.getElementById('commitDesc').value = desc;
-        // Re-run updateCommitBtn after refresh
-        const newSummary = document.getElementById('commitSummary');
-        const newBtn = document.getElementById('commitBtn');
-        if (newSummary && newBtn) {
-          const hasSummary = newSummary.value.trim().length > 0;
-          const hasStaged = currentFiles.some((f) => f.staged);
-          newBtn.disabled = !hasSummary || !hasStaged;
+        const result = await window.gitAPI.stageAll(currentRepo, selectAllCheck.checked);
+        if (result.error) {
+          selectAllCheck.checked = !selectAllCheck.checked;
+          commitMsg.innerHTML = `<div class="commit-error">${escapeHtml(result.error)}</div>`;
+          return;
         }
+        await refreshStatusPreservingCommitInputs();
       });
 
       commitBtn.addEventListener('click', async () => {
@@ -797,6 +894,7 @@
     }
 
     async function selectFile(file, el) {
+      selectedFilePath = file.path;
       document.querySelectorAll('.file-item').forEach((e) => e.classList.remove('active'));
       el.classList.add('active');
 
@@ -1033,18 +1131,7 @@
     // Auto-refresh when files change on disk
     window.gitAPI.onFilesChanged(() => {
       if (!currentRepo) return;
-      // Preserve commit form inputs across auto-refresh
-      const summaryEl = document.getElementById('commitSummary');
-      const descEl = document.getElementById('commitDesc');
-      const savedSummary = summaryEl ? summaryEl.value : '';
-      const savedDesc = descEl ? descEl.value : '';
-
-      loadStatus().then(() => {
-        const newSummary = document.getElementById('commitSummary');
-        const newDesc = document.getElementById('commitDesc');
-        if (newSummary) newSummary.value = savedSummary;
-        if (newDesc) newDesc.value = savedDesc;
-      });
+      void refreshStatusPreservingCommitInputs();
     });
   </script>
 </body>
